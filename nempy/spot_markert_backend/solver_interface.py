@@ -386,7 +386,7 @@ class InterfaceToSolver:
         1              2    =  20.0    0.0
 
         """
-        slack = constraints_type_and_rhs['constraint_id'].apply(lambda x: self.mip_model.constr_by_name(str(x)).slack,
+        slack = constraints_type_and_rhs['constraint_id'].apply(lambda x: getattr(self.mip_model.constr_by_name(str(x)), 'slack', 0.0),
                                                                 self.mip_model)
         return slack
 
