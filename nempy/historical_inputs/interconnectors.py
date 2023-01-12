@@ -186,13 +186,8 @@ class InterconnectorData:
         loss_functions = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
                                   loss_functions, on='interconnector')
 
-        def loss_function_adjuster(loss_function, generic_constraint_factor):
-            def wrapper(flow):
-                return loss_function(flow * generic_constraint_factor)
-            return wrapper
-
         loss_functions['loss_function'] = \
-            loss_functions.apply(lambda x: loss_function_adjuster(x['loss_function'], x['generic_constraint_factor']),
+            loss_functions.apply(lambda x: _LossFunctionAdjuster(x['loss_function'], x['generic_constraint_factor']),
                                  axis=1)
 
         loss_functions = loss_functions.drop('generic_constraint_factor', axis=1)
@@ -487,12 +482,24 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
     loss_functions = pd.merge(interconnector_coefficients, demand_loss_factor_offset, 'left', on=['interconnector'])
     loss_functions['loss_constant'] = loss_functions['loss_constant'] + loss_functions['offset'].fillna(0)
     loss_functions['loss_function'] = \
-        loss_functions.apply(lambda x: _create_function(x['loss_constant'], x['flow_coefficient']), axis=1)
+        loss_functions.apply(lambda x: _LossFunction(x['loss_constant'], x['flow_coefficient']), axis=1)
     return loss_functions.loc[:, ['interconnector', 'loss_function', 'from_region_loss_share']]
 
 
-def _create_function(constant, flow_coefficient):
-    def loss_function(flow):
-        return (constant - 1) * flow + (flow_coefficient / 2) * flow ** 2
+class _LossFunction:
+    def __init__(self, constant, flow_coefficient) -> None:
+        self.constant, self.flow_coefficient = constant, flow_coefficient
 
-    return loss_function
+    def __call__(self, flow: float) -> float:
+        return (self.constant - 1) * flow + (self.flow_coefficient / 2) * flow ** 2
+
+
+class _LossFunctionAdjuster:
+    """
+    Adjust a loss function by a generic constraint factor
+    """
+    def __init__(self, loss_function, generic_constraint_factor):
+        self.loss_function, self.generic_constraint_factor = loss_function, generic_constraint_factor
+
+    def __call__(self,flow):
+        return self.loss_function(flow * self.generic_constraint_factor)
